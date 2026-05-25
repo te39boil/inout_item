@@ -576,7 +576,7 @@
     renderCart();
   });
 
-  // ── JSONP 헬퍼 (CORS 우회) ───────────────────
+  // ── JSONP 헬퍼 (file:// 환경용 CORS 우회) ────
   function jsonp(url, timeout = 20000) {
     return new Promise((resolve, reject) => {
       const cb     = '_cb' + Date.now();
@@ -591,9 +591,24 @@
     });
   }
 
+  // ── API 호출 (프로토콜 자동 감지) ─────────────
+  // https → fetch 사용 (Apps Script CORS 지원)
+  // file: → JSONP 사용 (CORS 우회)
+  function callApi(url) {
+    if (location.protocol === 'https:') {
+      return fetch(url, { redirect: 'follow' })
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .catch(() => jsonp(url)); // fetch 실패 시 JSONP 폴백
+    }
+    return jsonp(url);
+  }
+
   // ── 부품 목록 로드 (재시도 포함) ──────────────
   function loadItems(retry = 0) {
-    jsonp(`${SCRIPT_URL}?action=getItems`)
+    callApi(`${SCRIPT_URL}?action=getItems`)
       .then(data => {
         if (!data.success) throw new Error(data.error);
         allItems = data.items;
@@ -796,7 +811,7 @@
   function loadSupply() {
     const body = document.getElementById('supply-body');
     body.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">불러오는 중…</div></div>`;
-    jsonp(`${SCRIPT_URL}?action=getHistory&pending=true`)
+    callApi(`${SCRIPT_URL}?action=getHistory&pending=true`)
       .then(data => {
         if (!data.success) throw new Error(data.error);
         renderSupply(data.history);
@@ -853,7 +868,7 @@
     const btn = el ? el.querySelector('.btn-done') : null;
     if (btn) { btn.textContent = '처리 중…'; btn.disabled = true; }
 
-    jsonp(`${SCRIPT_URL}?action=markComplete&seq=${seq}`)
+    callApi(`${SCRIPT_URL}?action=markComplete&seq=${seq}`)
       .then(data => {
         if (!data.success) throw new Error(data.error);
         if (el) {
@@ -912,7 +927,7 @@
       })))
     });
 
-    jsonp(`${SCRIPT_URL}?${params}`)
+    callApi(`${SCRIPT_URL}?${params}`)
       .then(data => {
         if (!data.success) throw new Error(data.error);
         cart = {}; qty = {};
@@ -931,7 +946,7 @@
   function loadHistory() {
     const body = document.getElementById('history-body');
     body.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text">불러오는 중…</div></div>`;
-    jsonp(`${SCRIPT_URL}?action=getHistory`)
+    callApi(`${SCRIPT_URL}?action=getHistory`)
       .then(data => {
         if (!data.success) throw new Error(data.error);
         renderHistory(data.history);
@@ -996,7 +1011,7 @@
       btn.textContent = '삭제 중…';
       btn.disabled = true;
 
-      jsonp(`${SCRIPT_URL}?action=deleteEntry&seq=${seq}`)
+      callApi(`${SCRIPT_URL}?action=deleteEntry&seq=${seq}`)
         .then(data => {
           if (!data.success) throw new Error(data.error);
           const el = document.getElementById(`hi-${seq}`);
